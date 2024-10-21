@@ -1,38 +1,70 @@
+###############################################
+# TASK: process the json from the previous step
+###############################################
+
 # imports
 import functions_framework
-from google.cloud import secretmanager
+import datetime
 from google.cloud import storage
-import json
+import json 
+from io import BytesIO
+from dateutil import parser
+from google.cloud import secretmanager
 import duckdb
 import pandas as pd
+import re         
 
 # setup
 project_id = 'group2-ba882'
-secret_id = 'project_key'   #<---------- this is the name of the secret you created
+secret_id = 'project_key'
 version_id = 'latest'
-
+bucket_name = 'group2-ba882-project'                            
 
 # db setup
 db = 'city_services_boston'
-schema = "raw"
-raw_db_schema = f"{db}.{schema}"
+raw_db_schema = f"{db}.raw"
 stage_db_schema = f"{db}.stage"
 
-
+def get_latest_job_file(bucket_name, dataset='boston_data'):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    
+    # List all blobs in the dataset folder
+    blobs = list(bucket.list_blobs(prefix=f"{dataset}/"))
+    
+    if not blobs:
+        return None
+    
+    # Extract job IDs and find the latest one
+    job_ids = set()
+    for blob in blobs:
+        match = re.search(r'/(\d{12}-[a-f0-9-]+)/', blob.name)
+        if match:
+            job_ids.add(match.group(1))
+    
+    if not job_ids:
+        return None
+    
+    latest_job_id = max(job_ids)
+    
+    # Find the specific JSON file in the latest job folder
+    target_blob = next((blob for blob in blobs if f"{latest_job_id}/data.json" in blob.name), None)
+    
+    if target_blob:
+        return f"gs://{bucket_name}/{target_blob.name}"
+    else:
+        return None
 
 ############################################################### main task
-
 @functions_framework.http
 def main(request):
-
-    # Parse the request data
+    # get the raw json from gcs from the previous step
     request_json = request.get_json(silent=True)
-    print(f"request: {json.dumps(request_json)}")
 
-    # instantiate the services 
-    sm = secretmanager.SecretManagerServiceClient()
+    # setup                                 
     storage_client = storage.Client()
-
+    sm = secretmanager.SecretManagerServiceClient()
+    
     # Build the resource name of the secret version
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
 
@@ -43,175 +75,234 @@ def main(request):
     # initiate the MotherDuck connection through an access token through
     md = duckdb.connect(f'md:?motherduck_token={md_token}') 
 
+    # create db if not exists
+    #create_db_sql = f"CREATE DATABASE IF NOT EXISTS {db};"
+    #md.sql(create_db_sql)
+
     # drop if exists and create the raw schema for 
     create_schema = f"DROP SCHEMA IF EXISTS {raw_db_schema} CASCADE; CREATE SCHEMA IF NOT EXISTS {raw_db_schema};"
     md.sql(create_schema)
 
-    print(md.sql("SHOW DATABASES;").show())
+    # create stage schema if first time running function
+    create_schema = f"CREATE SCHEMA IF NOT EXISTS {stage_db_schema};"
+    md.sql(create_schema)
 
-
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: requests
+    print(md.sql("SHOW DATABASES;").show())  
 
     # read in from gcs
-    requests_path = request_json.get('requests')
-    requests_df = pd.read_parquet(requests_path)
+    json_path = get_latest_job_file(bucket_name)
+    print(f"Processing data from {json_path}")
+            
+    # Download the JSON file
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob_name = '/'.join(json_path.split('/')[3:])   # Remove 'gs://bucket_name/' from the path
+    print(blob_name)
+    blob = bucket.blob(blob_name)
+    print(blob)
+    blob_content = blob.download_as_text()
+    lines = blob_content.splitlines()
 
+    # parse the JSONL (json lines) file
+    records = [json.loads(line) for line in lines]
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: requests
+                                               
+    # # parse the JSONL (json lines) file
+    # requests = [json.loads(line) for line in lines]
+
+    # parse the feed elements we want
+    parsed_requests = []
+    for record in records:
+        parsed_requests.append({
+            '_id': record.get('_id'),
+            'case_enquiry_id': record.get('case_enquiry_id'),
+            'case_title': record.get('case_title'),
+            'subject': record.get('subject'),
+            'reason': record.get('reason'),
+            'type': record.get('type'),
+            'queue': record.get('queue'),
+            'source': record.get('source'),
+            'submitted_photo': record.get('submitted_photo'),
+            'closed_photo': record.get('closed_photo')
+            #'job_id': request_json.get('jobid'),
+            #'ingest_timestamp': datetime.datetime.now().isoformat()
+        })
+
+    # Convert parsed records to DataFrame for easirer ingestion
+    requests_df = pd.DataFrame(parsed_requests)
+
+    # Upload the parsed data to MotherDuck
+    raw_tbl_name = f"{raw_db_schema}.requests" #  API data          
     # table logic
-    raw_tbl_name = f"{raw_db_schema}.requests"
+                                                                           
     raw_tbl_sql = f"""
-    DROP TABLE IF EXISTS {raw_tbl_name} ;
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.requests WHERE FALSE;
-    """
+    DROP TABLE IF EXISTS {raw_tbl_name};
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.requests WHERE FALSE;                          
+                                                                               
+    """     
+                              
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
-
-    # ingest into raw schema
+    # Ingest the parsed DataFrame into the raw schema
     ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM requests_df"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del requests_df
-
-    # upsert like operation -- will only insert new records, not update
-    upsert_sql = f"""
-    INSERT INTO {stage_db_schema}.requests AS stage
-    SELECT *
-    FROM {raw_tbl_name} AS raw
-    ON CONFLICT (_id)
-    DO NOTHING;
-    """
-    print(upsert_sql)
-    md.sql(upsert_sql)
-    
     
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: location
+    # locations = [json.loads(line) for line in lines]
 
-    # read in from gcs
-    location_path = location_json.get('location')
-    location_df = pd.read_parquet(location_path)
+    # parse the feed elements we want
+    parsed_locations = []
+    for record in records:
+        parsed_locations.append({
+            'location': record.get('location'),
+            'fire_district': record.get('fire_district'),
+            'pwd_district': record.get('pwd_district'),
+            'city_council_district': record.get('city_council_district'),
+            'police_district': record.get('police_district'),
+            'neighborhood': record.get('neighborhood'),
+            'neighborhood_services_district': record.get('neighborhood_services_district'),
+            'ward': record.get('ward'),
+            'precinct': record.get('precinct'),
+            'location_street_name': record.get('location_street_name'),
+            'location_zipcode': record.get('location_zipcode'),
+            'latitude': record.get('latitude'),
+            'longitude': record.get('longitude'),
+            'geom_4326': record.get('geom_4326')
+            #'job_id': request_json.get('jobid'),
+            #'ingest_timestamp': datetime.datetime.now().isoformat()
+        })
+
+    # Convert parsed records to DataFrame for easirer ingestion
+    locations_df = pd.DataFrame(parsed_locations)
+
+    # Upload the parsed data to MotherDuck
+    raw_tbl_name = f"{raw_db_schema}.locations" #  API data
 
     # table logic
-    raw_tbl_name = f"{raw_db_schema}.tags"
     raw_tbl_sql = f"""
-    DROP TABLE IF EXISTS {raw_tbl_name} ;
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.location WHERE FALSE;
+    DROP TABLE IF EXISTS {raw_tbl_name};
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.locations WHERE FALSE;
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
-    # ingest into raw schema
-    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM location_df"
+    # Ingest the parsed DataFrame into the raw schema
+    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM locations_df"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
-    del location_df
-
-    # upsert like operation -- will only insert new records, not update
-    upsert_sql = f"""
-    INSERT INTO {stage_db_schema}.location AS stage
-    SELECT *
-    FROM {raw_tbl_name} AS raw
-    ON CONFLICT (_id, location)
-    DO NOTHING;
-    """
-    print(upsert_sql)
-    md.sql(upsert_sql)
-
+    del locations_df
+    
+    
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: department_assignment
+    
+    # department_assignment = [json.loads(line) for line in lines]
 
-    # read in from gcs
-    department_assignment_path = request_json.get('department_assignment')
-    department_assignment_df = pd.read_parquet(department_assignment_path)
+    # parse the feed elements we want
+    parsed_department_assignment = []
+    for record in records:
+        parsed_department_assignment.append({
+            'case_enquiry_id': record.get('case_enquiry_id'),
+            'department': record.get('department')
+            #'job_id': request_json.get('jobid'),
+            #'ingest_timestamp': datetime.datetime.now().isoformat()
+        })
+
+    # Convert parsed records to DataFrame for easirer ingestion
+    department_assignment_df = pd.DataFrame(parsed_department_assignment)
+
+    # Upload the parsed data to MotherDuck
+    raw_tbl_name = f"{raw_db_schema}.department_assignment" # API data
 
     # table logic
-    raw_tbl_name = f"{raw_db_schema}.department_assignment"
     raw_tbl_sql = f"""
-    DROP TABLE IF EXISTS {raw_tbl_name} ;
+    DROP TABLE IF EXISTS {raw_tbl_name};
     CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.department_assignment WHERE FALSE;
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
-    # ingest into raw schema
+    # Ingest the parsed DataFrame into the raw schema
     ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM department_assignment_df"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del department_assignment_df
-
-    # upsert like operation -- will only insert new records, not update
-    upsert_sql = f"""
-    INSERT INTO {stage_db_schema}.department_assignment AS stage
-    SELECT *
-    FROM {raw_tbl_name} AS raw
-    ON CONFLICT (_id, case_enquiry_id, department)
-    DO NOTHING;
-    """
-    print(upsert_sql)
-    md.sql(upsert_sql)
-
-
+    
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: response_time
 
-    # read in from gcs
-    response_time_path = request_json.get('response_time')
-    response_time_df = pd.read_parquet(response_time_path)
-    
+    # response_time = [json.loads(line) for line in lines]
+
+    # parse the feed elements we want
+    parsed_response_time = []
+    for record in records:
+        parsed_response_time.append({
+            'case_enquiry_id': record.get('case_enquiry_id'),
+            'on_time': record.get('on_time')
+            #'job_id': request_json.get('jobid'),
+            #'ingest_timestamp': datetime.datetime.now().isoformat()
+        })
+
+    # Convert parsed records to DataFrame for easirer ingestion
+    response_time_df = pd.DataFrame(parsed_response_time)
+
+    # Upload the parsed data to MotherDuck
+    raw_tbl_name = f"{raw_db_schema}.response_time" # API data
+
     # table logic
-    raw_tbl_name = f"{raw_db_schema}.response_time"
     raw_tbl_sql = f"""
-    DROP TABLE IF EXISTS {raw_tbl_name} ;
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.response_time WHERE FALSE;
+    DROP TABLE IF EXISTS {raw_tbl_name};
+    CREATE TABLE {raw_tbl_name} (
+        case_enquiry_id VARCHAR,
+        on_time VARCHAR
+    );
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
-    # ingest into raw schema
+    # Ingest the parsed DataFrame into the raw schema
     ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM response_time_df"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del response_time_df
+    
+        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: status_history
+    
+    # status_history = [json.loads(line) for line in lines]
 
-    # upsert like operation -- will only insert new records, not update
-    upsert_sql = f"""
-    INSERT INTO {stage_db_schema}.response_time AS stage
-    SELECT *
-    FROM {raw_tbl_name} AS raw
-    ON CONFLICT (_id, case_enquiry_id)
-    DO NOTHING;
-    """
-    print(upsert_sql)
-    md.sql(upsert_sql)
+    # parse the feed elements we want
+    parsed_status_history = []
+    for record in records:
+        parsed_status_history.append({
+            'case_enquiry_id': record.get('case_enquiry_id'),
+            'open_dt': parser.parse(record.get('open_dt')).isoformat() if record.get('open_dt') else None,
+            'sla_target_dt': parser.parse(record.get('sla_target_dt')).isoformat() if record.get('sla_target_dt') else None,
+            'closed_dt': parser.parse(record.get('closed_dt')).isoformat() if record.get('closed_dt') else None,
+            'case_status': record.get('case_status'),
+            'closure_reason': record.get('closure_reason')
+            #'job_id': request_json.get('jobid'),
+            #'ingest_timestamp': datetime.datetime.now().isoformat()
+        })
 
+    # Convert parsed records to DataFrame for easirer ingestion
+    status_history_df = pd.DataFrame(parsed_status_history)
 
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: status_history
-
-    # read in from gcs
-    status_history_path = request_json.get('status_history')
-    status_history_df = pd.read_parquet(status_history_path)
+    # Upload the parsed data to MotherDuck
+    raw_tbl_name = f"{raw_db_schema}.status_history" # API
 
     # table logic
-    raw_tbl_name = f"{raw_db_schema}.status_history"
     raw_tbl_sql = f"""
-    DROP TABLE IF EXISTS {raw_tbl_name} ;
+    DROP TABLE IF EXISTS {raw_tbl_name};
     CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.status_history WHERE FALSE;
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
-    # ingest into raw schema
+    # Ingest the parsed DataFrame into the raw schema
     ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM status_history_df"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del status_history_df
-
-    # upsert like operation -- will only insert new records, not update
-    upsert_sql = f"""
-    INSERT INTO {stage_db_schema}.status_history AS stage
-    SELECT *
-    FROM {raw_tbl_name} AS raw
-    ON CONFLICT (_id, case_enquiry_id, open_dt)
-    DO NOTHING;
-    """
-    print(upsert_sql)
-    md.sql(upsert_sql)
-
 
     return {}, 200
