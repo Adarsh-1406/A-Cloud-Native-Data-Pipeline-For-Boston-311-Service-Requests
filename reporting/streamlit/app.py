@@ -9,8 +9,8 @@ import networkx as nx
 from collections import Counter
 import matplotlib.pyplot as plt
 
-project_id = '_your project id_'
-secret_id = 'mother_duck'   #<---------- this is the name of the secret you created
+project_id = 'group2-ba882'
+secret_id = 'project_key'   #<---------- this is the name of the secret you created
 version_id = 'latest'
 
 db = 'awsblogs'
