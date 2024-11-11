@@ -48,7 +48,8 @@ def task(request):
     raw_tbl_name = f"{db_schema}.locations"
     raw_tbl_sql = f"""
     CREATE TABLE IF NOT EXISTS {raw_tbl_name} (
-        location VARCHAR
+        case_enquiry_id VARCHAR
+        ,location VARCHAR
         ,fire_district VARCHAR
         ,pwd_district VARCHAR
         ,city_council_district VARCHAR
@@ -61,8 +62,10 @@ def task(request):
         ,location_zipcode VARCHAR
         ,latitude FLOAT
         ,longitude FLOAT
-        ,geom_4326 GEOMETRY
-        ,PRIMARY KEY (location)
+        ,geom_4326 VARCHAR
+        ,job_id VARCHAR
+        ,ingest_timestamp TIMESTAMP
+        ,PRIMARY KEY (case_enquiry_id)
     );
     """
     print(f"{raw_tbl_sql}")

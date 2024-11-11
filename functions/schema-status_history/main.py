@@ -54,6 +54,8 @@ def task(request):
         ,closed_dt TIMESTAMP
         ,case_status VARCHAR
         ,closure_reason VARCHAR
+        ,job_id VARCHAR
+        ,ingest_timestamp TIMESTAMP
         ,PRIMARY KEY (case_enquiry_id, open_dt)
     );
     """

@@ -58,6 +58,8 @@ def task(request):
         ,source VARCHAR
         ,submitted_photo VARCHAR
         ,closed_photo VARCHAR
+        ,job_id VARCHAR
+        ,ingest_timestamp TIMESTAMP
         ,PRIMARY KEY (case_enquiry_id)
     );
     """

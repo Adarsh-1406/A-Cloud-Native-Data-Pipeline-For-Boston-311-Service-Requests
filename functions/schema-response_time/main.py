@@ -48,7 +48,9 @@ def task(request):
     raw_tbl_sql = f"""
     CREATE TABLE IF NOT EXISTS {raw_tbl_name} (
         case_enquiry_id VARCHAR
-        ,on_time BOOLEAN
+        ,on_time VARCHAR
+        ,job_id VARCHAR
+        ,ingest_timestamp TIMESTAMP
         ,PRIMARY KEY (case_enquiry_id)
     );
     """

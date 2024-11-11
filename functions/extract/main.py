@@ -10,7 +10,7 @@ import functions_framework
 bucket_name = "group2-ba882-project"
 
 # CSV download URL
-csv_url = "https://data.boston.gov/dataset/8048697b-ad64-4bfc-b090-ee00169f2323/resource/dff4d804-5031-443a-8409-8344efd0e5c8/download/tmpisupwu40.csv"
+csv_url = "https://data.boston.gov/dataset/8048697b-ad64-4bfc-b090-ee00169f2323/resource/dff4d804-5031-443a-8409-8344efd0e5c8/download/tmpd4m834vp.csv"
 
 # Function to download CSV data
 def download_csv(url):
@@ -41,9 +41,9 @@ def main(request):
         df = pd.read_csv(BytesIO(csv_data))
         
         # Attempt to sort by date and get the latest 100,000 rows
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'])
-            df = df.sort_values('date', ascending=False).head(100000)
+        if 'open_dt' in df.columns:
+            #df['open_dt'] = pd.to_datetime(df['open_dt'])
+            df = df.sort_values('open_dt', ascending=False).head(100000)
         else:
             # If no date column, just take the last 100,000 rows
             df = df.tail(100000)

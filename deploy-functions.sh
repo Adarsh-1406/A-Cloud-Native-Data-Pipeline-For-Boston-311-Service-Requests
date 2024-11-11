@@ -109,5 +109,5 @@ gcloud functions deploy group2-load \
     --service-account group2-ba882@group2-ba882.iam.gserviceaccount.com \
     --region us-central1 \
     --allow-unauthenticated \
-    --memory 512MB \
+    --memory 1GB \
 	--timeout 540s

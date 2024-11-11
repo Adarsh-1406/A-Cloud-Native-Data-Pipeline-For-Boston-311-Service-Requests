@@ -38,7 +38,7 @@ def get_latest_job_file(bucket_name, dataset='boston_data'):
     # Extract job IDs and find the latest one
     job_ids = set()
     for blob in blobs:
-        match = re.search(r'/(\d{12}-[a-f0-9-]+)/', blob.name)
+        match = re.search(r'(\d{12}-[a-f0-9-]+)/', blob.name)
         if match:
             job_ids.add(match.group(1))
     
@@ -76,16 +76,16 @@ def main(request):
     md = duckdb.connect(f'md:?motherduck_token={md_token}') 
 
     # create db if not exists
-    #create_db_sql = f"CREATE DATABASE IF NOT EXISTS {db};"
-    #md.sql(create_db_sql)
+    create_db_sql = f"CREATE DATABASE IF NOT EXISTS {db};"
+    md.sql(create_db_sql)
 
     # drop if exists and create the raw schema for 
-    create_schema = f"DROP SCHEMA IF EXISTS {raw_db_schema} CASCADE; CREATE SCHEMA IF NOT EXISTS {raw_db_schema};"
-    md.sql(create_schema)
+    #create_schema = f"DROP SCHEMA IF EXISTS {raw_db_schema} CASCADE; CREATE SCHEMA IF NOT EXISTS {raw_db_schema};"
+    #md.sql(create_schema)
 
     # create stage schema if first time running function
-    create_schema = f"CREATE SCHEMA IF NOT EXISTS {stage_db_schema};"
-    md.sql(create_schema)
+    #create_schema = f"CREATE SCHEMA IF NOT EXISTS {stage_db_schema};"
+    #md.sql(create_schema)
 
     print(md.sql("SHOW DATABASES;").show())  
 
@@ -124,9 +124,9 @@ def main(request):
             'queue': record.get('queue'),
             'source': record.get('source'),
             'submitted_photo': record.get('submitted_photo'),
-            'closed_photo': record.get('closed_photo')
-            #'job_id': request_json.get('jobid'),
-            #'ingest_timestamp': datetime.datetime.now().isoformat()
+            'closed_photo': record.get('closed_photo'),
+            'job_id': request_json.get('jobid'),
+            'ingest_timestamp': datetime.datetime.now().isoformat()
         })
 
     # Convert parsed records to DataFrame for easirer ingestion
@@ -134,18 +134,20 @@ def main(request):
 
     # Upload the parsed data to MotherDuck
     raw_tbl_name = f"{raw_db_schema}.requests" #  API data          
+    stage_tbl_name = f"{stage_db_schema}.requests" 
+
     # table logic
                                                                            
     raw_tbl_sql = f"""
     DROP TABLE IF EXISTS {raw_tbl_name};
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.requests WHERE FALSE;                          
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM requests_df WHERE CAST (case_enquiry_id as VARCHAR) NOT IN (SELECT CAST(case_enquiry_id as VARCHAR) FROM {stage_tbl_name});                          
                                                                                
     """     
                               
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
     # Ingest the parsed DataFrame into the raw schema
-    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM requests_df"
+    ingest_sql = f"INSERT INTO {stage_tbl_name} SELECT * FROM {raw_tbl_name}"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del requests_df
@@ -157,6 +159,7 @@ def main(request):
     parsed_locations = []
     for record in records:
         parsed_locations.append({
+            'case_enquiry_id': record.get('case_enquiry_id'),
             'location': record.get('location'),
             'fire_district': record.get('fire_district'),
             'pwd_district': record.get('pwd_district'),
@@ -170,9 +173,9 @@ def main(request):
             'location_zipcode': record.get('location_zipcode'),
             'latitude': record.get('latitude'),
             'longitude': record.get('longitude'),
-            'geom_4326': record.get('geom_4326')
-            #'job_id': request_json.get('jobid'),
-            #'ingest_timestamp': datetime.datetime.now().isoformat()
+            'geom_4326': record.get('geom_4326'),
+            'job_id': request_json.get('jobid'),
+            'ingest_timestamp': datetime.datetime.now().isoformat()
         })
 
     # Convert parsed records to DataFrame for easirer ingestion
@@ -180,17 +183,20 @@ def main(request):
 
     # Upload the parsed data to MotherDuck
     raw_tbl_name = f"{raw_db_schema}.locations" #  API data
-
+    stage_tbl_name = f"{stage_db_schema}.locations"
     # table logic
     raw_tbl_sql = f"""
     DROP TABLE IF EXISTS {raw_tbl_name};
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.locations WHERE FALSE;
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM locations_df WHERE CAST (case_enquiry_id as VARCHAR) NOT IN (SELECT CAST(case_enquiry_id as VARCHAR) FROM {stage_tbl_name});
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
+    # Upload the parsed data to MotherDuck
+     #  API data  
+
     # Ingest the parsed DataFrame into the raw schema
-    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM locations_df"
+    ingest_sql = f"INSERT INTO {stage_tbl_name} SELECT * FROM {raw_tbl_name}"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del locations_df
@@ -205,9 +211,9 @@ def main(request):
     for record in records:
         parsed_department_assignment.append({
             'case_enquiry_id': record.get('case_enquiry_id'),
-            'department': record.get('department')
-            #'job_id': request_json.get('jobid'),
-            #'ingest_timestamp': datetime.datetime.now().isoformat()
+            'department': record.get('department'),
+            'job_id': request_json.get('jobid'),
+            'ingest_timestamp': datetime.datetime.now().isoformat()
         })
 
     # Convert parsed records to DataFrame for easirer ingestion
@@ -215,17 +221,19 @@ def main(request):
 
     # Upload the parsed data to MotherDuck
     raw_tbl_name = f"{raw_db_schema}.department_assignment" # API data
+    stage_tbl_name = f"{stage_db_schema}.department_assignment"
 
     # table logic
     raw_tbl_sql = f"""
     DROP TABLE IF EXISTS {raw_tbl_name};
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.department_assignment WHERE FALSE;
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM department_assignment_df WHERE CAST (case_enquiry_id as VARCHAR) NOT IN (SELECT CAST(case_enquiry_id as VARCHAR) FROM {stage_tbl_name});
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
+
     # Ingest the parsed DataFrame into the raw schema
-    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM department_assignment_df"
+    ingest_sql = f"INSERT INTO {stage_tbl_name} SELECT * FROM {raw_tbl_name}"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del department_assignment_df
@@ -239,9 +247,9 @@ def main(request):
     for record in records:
         parsed_response_time.append({
             'case_enquiry_id': record.get('case_enquiry_id'),
-            'on_time': record.get('on_time')
-            #'job_id': request_json.get('jobid'),
-            #'ingest_timestamp': datetime.datetime.now().isoformat()
+            'on_time': record.get('on_time'),
+            'job_id': request_json.get('jobid'),
+            'ingest_timestamp': datetime.datetime.now().isoformat()
         })
 
     # Convert parsed records to DataFrame for easirer ingestion
@@ -249,58 +257,59 @@ def main(request):
 
     # Upload the parsed data to MotherDuck
     raw_tbl_name = f"{raw_db_schema}.response_time" # API data
-
+    stage_tbl_name = f"{stage_db_schema}.response_time" 
     # table logic
     raw_tbl_sql = f"""
     DROP TABLE IF EXISTS {raw_tbl_name};
-    CREATE TABLE {raw_tbl_name} (
-        case_enquiry_id VARCHAR,
-        on_time VARCHAR
-    );
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM response_time_df WHERE CAST (case_enquiry_id as VARCHAR) NOT IN (SELECT CAST(case_enquiry_id as VARCHAR) FROM {stage_tbl_name});
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
+    # Upload the parsed data to MotherDuck
+    #  API data  
+
     # Ingest the parsed DataFrame into the raw schema
-    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM response_time_df"
+    ingest_sql = f"INSERT INTO {stage_tbl_name} SELECT * FROM {raw_tbl_name}"
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del response_time_df
     
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: status_history
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tbl: status_history
     
     # status_history = [json.loads(line) for line in lines]
 
-    # parse the feed elements we want
+    # Now use this function in your script
     parsed_status_history = []
     for record in records:
         parsed_status_history.append({
             'case_enquiry_id': record.get('case_enquiry_id'),
-            'open_dt': parser.parse(record.get('open_dt')).isoformat() if record.get('open_dt') else None,
-            'sla_target_dt': parser.parse(record.get('sla_target_dt')).isoformat() if record.get('sla_target_dt') else None,
-            'closed_dt': parser.parse(record.get('closed_dt')).isoformat() if record.get('closed_dt') else None,
+            'open_dt': record.get('open_dt'),
+            'sla_target_dt': record.get('sla_target_dt'),
+            'closed_dt': record.get('closed_dt'),
             'case_status': record.get('case_status'),
-            'closure_reason': record.get('closure_reason')
-            #'job_id': request_json.get('jobid'),
-            #'ingest_timestamp': datetime.datetime.now().isoformat()
-        })
+            'closure_reason': record.get('closure_reason'),
+            'job_id': request_json.get('jobid'),
+            'ingest_timestamp': datetime.datetime.now().isoformat()
+    })
 
     # Convert parsed records to DataFrame for easirer ingestion
     status_history_df = pd.DataFrame(parsed_status_history)
 
     # Upload the parsed data to MotherDuck
     raw_tbl_name = f"{raw_db_schema}.status_history" # API
-
+    stage_tbl_name = f"{stage_db_schema}.status_history"
     # table logic
     raw_tbl_sql = f"""
     DROP TABLE IF EXISTS {raw_tbl_name};
-    CREATE TABLE {raw_tbl_name} AS SELECT * FROM {stage_db_schema}.status_history WHERE FALSE;
+    CREATE TABLE {raw_tbl_name} AS SELECT * FROM status_history_df WHERE CAST (case_enquiry_id as VARCHAR) NOT IN (SELECT CAST(case_enquiry_id as VARCHAR) FROM {stage_tbl_name});
     """
     print(f"{raw_tbl_sql}")
     md.sql(raw_tbl_sql)
 
     # Ingest the parsed DataFrame into the raw schema
-    ingest_sql = f"INSERT INTO {raw_tbl_name} SELECT * FROM status_history_df"
+    ingest_sql = f"INSERT INTO {stage_tbl_name} SELECT * FROM {raw_tbl_name}"
+
     print(f"Import statement: {ingest_sql}")
     md.sql(ingest_sql)
     del status_history_df
