@@ -5,12 +5,59 @@ import datetime
 import uuid
 from io import BytesIO
 import functions_framework
+from bs4 import BeautifulSoup
 
 # Google Cloud Storage bucket name
 bucket_name = "group2-ba882-project"
 
 # CSV download URL
-csv_url = "https://data.boston.gov/dataset/8048697b-ad64-4bfc-b090-ee00169f2323/resource/dff4d804-5031-443a-8409-8344efd0e5c8/download/tmpd4m834vp.csv"
+def latest_api_link():
+    # URL of the Boston 311 Service Requests page
+    url = "https://data.boston.gov/dataset/311-service-requests/resource/dff4d804-5031-443a-8409-8344efd0e5c8"
+ 
+    # Send an HTTP request to the page
+    response = requests.get(url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the page content using BeautifulSoup
+        soup = BeautifulSoup(response.content, 'html.parser')
+        # Find all anchor tags (<a>) in the page
+        links = soup.find_all('a', href=True)
+ 
+        # Use a set to store unique links containing 'download'
+        download_links = set()
+        for link in links:
+            if 'download' in link['href']:
+                download_links.add(link['href'])
+ 
+        # Check if all found links are the same or not
+        if len(download_links) == 1:
+            return download_links.pop()  # Return the single found link
+ 
+        elif len(download_links) > 1:
+            print("Multiple different download links found. Please choose which one to use:")
+ 
+            for link in download_links:
+                print(link)
+ 
+            return None  # Return None since multiple links were found
+ 
+        else:
+            print("No download links found.")
+            return None  # Return None if no links were found
+ 
+    else:
+        print(f"Failed to retrieve the page. Status code: {response.status_code}")
+        return None  # Return None if the request failed
+
+# Printing the API Link from the above Funciton 
+csv_url = latest_api_link()
+if csv_url:
+    print(f"Latest CSV URL: {csv_url}")
+else:
+    print("No valid CSV URL found.")
+
 
 # Function to download CSV data
 def download_csv(url):

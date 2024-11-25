@@ -6,3 +6,4 @@ requests
 duckdb
 feedparser
 pandas
+beautifulsoup4
