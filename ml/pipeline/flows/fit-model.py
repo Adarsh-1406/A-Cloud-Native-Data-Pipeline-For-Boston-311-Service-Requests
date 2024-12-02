@@ -27,7 +27,7 @@ def train():
     return resp
 
 # Prefect Flow
-@flow(name="mlops-post-length-model", log_prints=True)
+@flow(name="mlops-caseduration-model", log_prints=True)
 def training_flow():
     """The ETL flow which orchestrates Cloud Functions for the ML task"""
     
