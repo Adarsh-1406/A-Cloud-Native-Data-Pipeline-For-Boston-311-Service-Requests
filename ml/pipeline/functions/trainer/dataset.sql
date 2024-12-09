@@ -9,7 +9,7 @@ SELECT
     on_time,
     duration_hours
 FROM
-    city_services_boston.ml.case_duration_data
+    city_services_boston.ml.case_duration_ml
 ORDER BY
     created_at DESC
 LIMIT 10000;

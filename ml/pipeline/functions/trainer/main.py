@@ -15,7 +15,6 @@ from google.cloud import secretmanager
 from google.cloud import storage
 import duckdb
 
-
 # db setup
 db = 'city_services_boston'
 schema = "mlops"
@@ -27,7 +26,6 @@ secret_id = 'project_key'   #<---------- this is the name of the secret you crea
 version_id = 'latest'
 gcp_region = 'us-central1'
 
-
 ##################################################### helpers
 
 def load_sql(p):
@@ -36,7 +34,6 @@ def load_sql(p):
         return sql
 
 ##################################################### task
-
 
 @functions_framework.http
 def task(request):
@@ -107,22 +104,21 @@ def task(request):
     print(f"mae: {mae}")
     print(f"mape: {mape}")
 
-    
-   ############################################# write the model to GCS as an artifact
+    ############################################# write the model to GCS as an artifact
 
-   # Define GCS bucket and path for saving artifacts (each run gets its own folder)
+    # Define GCS bucket and path for saving artifacts (each run gets its own folder)
     GCS_BUCKET = "group2-ba882-vertex-models"
     GCS_PATH_RUN_FOLDER = f"pipeline/runs/{job_id}"
     FNAME_MODEL_ARTIFACT = "model/model.joblib"
     GCS_MODEL_PATH_FULL = f"gs://{GCS_BUCKET}/{GCS_PATH_RUN_FOLDER}/{FNAME_MODEL_ARTIFACT}"
 
-   # Save the trained model to GCS using GCSFileSystem
+    # Save the trained model to GCS using GCSFileSystem
     with GCSFileSystem().open(GCS_MODEL_PATH_FULL, 'wb') as f:
         joblib.dump(model, f)
     
-   ############################################# write metadata and metrics to MotherDuck warehouse
+    ############################################# write metadata and metrics to MotherDuck warehouse
 
-   # Insert metadata about this run into `model_runs` table in MotherDuck warehouse
+    # Insert metadata about this run into `model_runs` table in MotherDuck warehouse
     insert_query_model_run = f"""
     INSERT INTO {db_schema}.model_runs (job_id, name, gcs_path, model_path)
     VALUES ('{job_id}', '{model_name}', '{GCS_BUCKET + "/" + GCS_PATH_RUN_FOLDER}', '{GCS_MODEL_PATH_FULL}');
@@ -130,7 +126,7 @@ def task(request):
     print(f"Inserting into model_runs: {insert_query_model_run}")
     md.sql(insert_query_model_run)
 
-   # Prepare metrics data for insertion into `job_metrics` table in MotherDuck warehouse
+    # Prepare metrics data for insertion into `job_metrics` table in MotherDuck warehouse
     ingest_timestamp = pd.Timestamp.now()
     metrics_data_dict = {
         'job_id': job_id,
@@ -142,7 +138,7 @@ def task(request):
    
     metrics_df = pd.DataFrame([metrics_data_dict])
    
-   # Reshape metrics dataframe to match schema of `job_metrics`
+    # Reshape metrics dataframe to match schema of `job_metrics`
     metrics_df_melted = pd.melt(metrics_df, 
                                 id_vars=['job_id', 'created_at'], 
                                 value_vars=['r2', 'mae', 'mape'], 
@@ -151,20 +147,40 @@ def task(request):
    
     metrics_df_melted_final_cols_ordered = metrics_df_melted[['job_id', 'metric_name', 'metric_value', 'created_at']]
 
-   # Insert metrics into `job_metrics` table in MotherDuck warehouse
-    md.sql("INSERT INTO {db_schema}.job_metrics SELECT * FROM metrics_df_melted_final_cols_ordered")
+    # Ensure correct data types
+    metrics_df_melted_final_cols_ordered['job_id'] = metrics_df_melted_final_cols_ordered['job_id'].astype(str)
+    metrics_df_melted_final_cols_ordered['created_at'] = metrics_df_melted_final_cols_ordered['created_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
 
-   
-   ############################################# write hyperparameters to `job_parameters` table
+    # Insert metrics into `job_metrics` table in MotherDuck warehouse
+    md.sql(f"""
+        INSERT INTO {db_schema}.job_metrics 
+        (job_id, metric_name, metric_value, created_at)
+        SELECT job_id, metric_name, metric_value, created_at 
+        FROM metrics_df_melted_final_cols_ordered
+    """)
 
-    params_data_dict = {
-        "n_estimators": n_estimators,
-        "max_depth": max_depth,
-        "model": 'RandomForestRegressor',
-        'created_at': ingest_timestamp,
-        'job_id': job_id
-    }
-   
-    params_df_raw_formatting_done_for_insertion_into_table_job_parameters  = pd.DataFrame([params_data_dict])
-   
-    params_df_melted_final_formatting_ready_for_insertion_into_table_job_parameters
+    ############################################# write hyperparameters to `job_parameters` table
+
+    # Prepare parameters data for insertion into `job_parameters` table
+    params_data = [
+        {'job_id': str(job_id), 'parameter_name': 'n_estimators', 'parameter_value': str(n_estimators), 'created_at': ingest_timestamp},
+        {'job_id': str(job_id), 'parameter_name': 'max_depth', 'parameter_value': str(max_depth), 'created_at': ingest_timestamp},
+        {'job_id': str(job_id), 'parameter_name': 'model', 'parameter_value': 'RandomForestRegressor', 'created_at': ingest_timestamp}
+    ]
+
+    params_df = pd.DataFrame(params_data)
+
+    # Ensure correct data types
+    params_df['job_id'] = params_df['job_id'].astype(str)
+    params_df['parameter_value'] = params_df['parameter_value'].astype(str)
+    params_df['created_at'] = params_df['created_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Insert parameters into `job_parameters` table in MotherDuck warehouse
+    md.sql(f"""
+        INSERT INTO {db_schema}.job_parameters 
+        (job_id, parameter_name, parameter_value, created_at)
+        SELECT job_id, parameter_name, parameter_value, created_at 
+        FROM params_df
+    """)
+
+    return f"Model training completed. Job ID: {job_id}", 200

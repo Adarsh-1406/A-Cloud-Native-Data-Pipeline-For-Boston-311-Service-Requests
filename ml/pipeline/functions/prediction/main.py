@@ -40,7 +40,7 @@ select m.*, r.model_path
 from {db_schema}.job_metrics m 
 inner join {db_schema}.model_runs r on m.job_id = r.job_id
 where m.metric_name = 'mape'
-and r.name like '%post length%'
+and r.name like '%case duration%'
 order by m.metric_value asc,
 m.created_at desc
 limit 1
