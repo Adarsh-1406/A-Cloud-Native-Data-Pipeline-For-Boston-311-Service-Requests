@@ -21,19 +21,33 @@ import matplotlib.pyplot as plt
 
 ############################################ Streamlit App
 
-# Set Background Image for Boston 311
-background_image_url = "https://photos.fife.usercontent.google.com/pw/AP1GczOnIF7t9g4J6TOZf26WgdzlXSfOlKkqsHnyLDE_g6GdwemXgXJTHoxE=w1200-h675-s-no-gm?authuser=0" 
+import streamlit as st
+import base64
 
+# Function to load and encode the background image
+def load_background_image(image_file):
+    with open(image_file, "rb") as f:
+        data = base64.b64encode(f.read()).decode()
+    return data
+
+# Load the local image file (e.g., "Boston city.webp")
+background_image = load_background_image("Boston city.webp")
+
+# Set the background image using CSS
 st.markdown(f"""
-<style>
-.stApp {{
-  background-image: url("{background_image_url}");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}}
-</style>
+    <style>
+    .stApp {{
+        background-image: url("data:image/webp;base64,{background_image}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }}
+    </style>
 """, unsafe_allow_html=True)
+
+# Example content to display on the page
+st.title("Welcome to Boston 311")
+st.write("This is an example Streamlit application with a custom background image.")
 
 # Google Cloud Secret Manager setup
 project_id = 'group2-ba882'
@@ -208,6 +222,8 @@ helping you plan and manage requests, resources more efficiently.
 """, unsafe_allow_html=True)
 
 st.write("\n" * 2)  # Adds three newlines
+st.markdown("---")
+st.write("\n" * 2)  # Adds three newlines
 
 
 # Button to fetch predictions
@@ -247,6 +263,7 @@ if st.button("Predict Duration"):
         st.warning("Please provide at least one input field before predicting.")
 
 
+
 # SQL query to get date range (min and max published dates)
 sql = """
 select 
@@ -279,13 +296,13 @@ end_date = pd.to_datetime(end_date).date()
 #st.sidebar.file_uploader("Users can upload files that your app analyzes!")
 #st.sidebar.markdown("These controls are not wired up to control data, just highlighting you have a lot of control!")
 
-st.markdown("---")
+
 
 ############ There are some chat support features, more coming
 
-prompt = st.chat_input("Say something")
-if prompt:
-    st.write(f"User has sent the following prompt: {prompt}")
+#prompt = st.chat_input("Say something")
+#if prompt:
+   # st.write(f"User has sent the following prompt: {prompt}")
 
 
 ################################################################################################
