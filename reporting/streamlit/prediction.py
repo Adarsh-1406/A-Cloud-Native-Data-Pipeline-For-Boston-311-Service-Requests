@@ -46,8 +46,8 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Example content to display on the page
-st.title("Welcome to Boston 311")
-st.write("This is an example Streamlit application with a custom background image.")
+#st.title("Welcome to Boston 311")
+#st.write("This is an example Streamlit application with a custom background image.")
 
 # Google Cloud Secret Manager setup
 project_id = 'group2-ba882'
