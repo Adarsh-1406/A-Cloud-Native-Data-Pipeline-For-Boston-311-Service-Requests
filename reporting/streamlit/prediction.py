@@ -21,15 +21,8 @@ import matplotlib.pyplot as plt
 
 ############################################ Streamlit App
 
-# Set page configuration with custom icon and layout
-st.set_page_config(
-    page_title="PREDICT 311",
-    page_icon="https://play-lh.googleusercontent.com/-ei9jmjQa4C0dLIciwW3BF9Ym0M7_tjJlmlrDX3SxPQ7y5qflwWUsaGxuRzZyJBFZwg",
-    layout="wide"
-)
-
 # Set Background Image for Boston 311
-background_image_url = "https://drive.google.com/file/d/1xc6EoizZIhl7hemRA_L6jjrsLvVmVFH0/view?usp=drive_link" 
+background_image_url = "https://photos.fife.usercontent.google.com/pw/AP1GczOnIF7t9g4J6TOZf26WgdzlXSfOlKkqsHnyLDE_g6GdwemXgXJTHoxE=w1200-h675-s-no-gm?authuser=0" 
 
 st.markdown(f"""
 <style>
@@ -41,7 +34,6 @@ st.markdown(f"""
 }}
 </style>
 """, unsafe_allow_html=True)
-
 
 # Google Cloud Secret Manager setup
 project_id = 'group2-ba882'
@@ -92,11 +84,11 @@ def fetch_data():
             req.type,
             req.queue,
             req.source,
-            rt.on_time,
+            rt.on_time as case_status,
             sh.open_dt,
             sh.sla_target_dt,
             sh.closed_dt,
-            sh.case_status,
+            sh.case_status AS SH_Case_Status,
             sh.closure_reason
 
         FROM city_services_boston.raw.department_assignment da
@@ -138,13 +130,22 @@ def fetch_predictions(data):
 
 # Function to apply conditional formatting to the DataFrame
 def style_table(row):
-    # Check if the case is overdue or on time
-    if row["On Time"] == "Overdue":
-        return ["background-color: red; color: white"] * len(row)
-    elif row["On Time"] == "On Time":
-        return ["background-color: green; color: white"] * len(row)
-    else:
-        return [""] * len(row)
+
+    styles = [""] * len(row)
+    # Highlight Case Status column (green for On Time, red for Overdue)
+    if row["Case Status"] == "Overdue":
+        styles[row.index.get_loc("Case Status")] = "background-color: red; color: white"
+    elif row["Case Status"] == "On Time":
+        styles[row.index.get_loc("Case Status")] = "background-color: green; color: white"
+
+    # Highlight Case State column based on conditions
+    if row["Case State"] == "Severe":
+        styles[row.index.get_loc("Case State")] = "background-color: darkred; color: white"
+    elif row["Case State"] == "Moderate":
+        styles[row.index.get_loc("Case State")] = "background-color: orange; color: black"
+    elif row["Case State"] == "On Track":
+        styles[row.index.get_loc("Case State")] = "background-color: green; color: white"
+    return styles
 
 # User input for case details
 st.sidebar.header("Input Case Details For Prediction")
@@ -216,14 +217,29 @@ if st.button("Predict Duration"):
         
         if predictions:
             # Create a DataFrame with predictions and calculate On Time/Overdue status
-            df_predictions = pd.DataFrame({"Duration Hours": predictions})
-            df_predictions["On Time"] = df_predictions["Duration Hours"].apply(
+            df_predictions = pd.DataFrame({"Duration Hours": predictions})  # Calculate Case Status (On Time/Overdue)
+            df_predictions["Case Status"] = df_predictions["Duration Hours"].apply(
                 lambda x: "On Time" if x <= sla_hours else "Overdue"
             )
             
-            # Display predictions with conditional formatting
-            st.subheader("Predicted Case Durations")
+             # Calculate Case State (Severe/Moderate/On Track)
+
+            df_predictions["Case State"] = df_predictions["Duration Hours"].apply(
+
+                lambda x: (
+
+                    "Severe" if x > sla_hours * 1.7 else 
+
+                    ("Moderate" if x > sla_hours else "On Track")
+
+                )
+            )
+            # Display styled DataFrame with conditional formatting applied
+
             styled_df = df_predictions.style.apply(style_table, axis=1)
+
+            st.subheader("Predicted Case Durations")
+
             st.dataframe(styled_df, use_container_width=True)
         else:
             st.warning("No predictions available. Please check your input or try again.")
@@ -231,6 +247,48 @@ if st.button("Predict Duration"):
         st.warning("Please provide at least one input field before predicting.")
 
 
+# SQL query to get date range (min and max published dates)
+sql = """
+select 
+    min(published) as min,
+    max(published) as max,
+from
+    awsblogs.stage.posts
+"""
+date_range = md.sql(sql).df()
+
+# Extracting start_date and end_date from the query result
+start_date = date_range['min'].to_list()[0]
+end_date = date_range['max'].to_list()[0]
+
+# Check if 'min' or 'max' dates are NaT and replace them with today's date if necessary
+if pd.isna(start_date):
+    start_date = datetime.today()  # Replace NaT with today's date
+
+if pd.isna(end_date):
+    end_date = datetime.today()  # Replace NaT with today's date
+
+# Convert start_date and end_date to proper date format if needed (optional)
+start_date = pd.to_datetime(start_date).date()
+end_date = pd.to_datetime(end_date).date()
+
+
+########################################### CODE FOR LEFT PANEL
+
+#st.sidebar.button("A button to control inputs")
+#st.sidebar.file_uploader("Users can upload files that your app analyzes!")
+#st.sidebar.markdown("These controls are not wired up to control data, just highlighting you have a lot of control!")
+
+st.markdown("---")
+
+############ There are some chat support features, more coming
+
+prompt = st.chat_input("Say something")
+if prompt:
+    st.write(f"User has sent the following prompt: {prompt}")
+
+
+################################################################################################
 
 # Streamlit app to display data
 def main():
@@ -307,45 +365,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# SQL query to get date range (min and max published dates)
-sql = """
-select 
-    min(published) as min,
-    max(published) as max,
-from
-    awsblogs.stage.posts
-"""
-date_range = md.sql(sql).df()
-
-# Extracting start_date and end_date from the query result
-start_date = date_range['min'].to_list()[0]
-end_date = date_range['max'].to_list()[0]
-
-# Check if 'min' or 'max' dates are NaT and replace them with today's date if necessary
-if pd.isna(start_date):
-    start_date = datetime.today()  # Replace NaT with today's date
-
-if pd.isna(end_date):
-    end_date = datetime.today()  # Replace NaT with today's date
-
-# Convert start_date and end_date to proper date format if needed (optional)
-start_date = pd.to_datetime(start_date).date()
-end_date = pd.to_datetime(end_date).date()
-
-
-########################################### CODE FOR LEFT PANEL
-
-#st.sidebar.button("A button to control inputs")
-#st.sidebar.file_uploader("Users can upload files that your app analyzes!")
-#st.sidebar.markdown("These controls are not wired up to control data, just highlighting you have a lot of control!")
-
-st.markdown("---")
-
-############ There are some chat support features, more coming
-
-prompt = st.chat_input("Say something")
-if prompt:
-    st.write(f"User has sent the following prompt: {prompt}")
-
-################################################################################################

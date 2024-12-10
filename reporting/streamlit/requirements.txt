@@ -8,3 +8,4 @@ duckdb
 streamlit-lottie
 Pillow
 requests
+openai
