@@ -62,13 +62,13 @@ body {{
 }}
 .stButton>button {{
     color: white;
-    background-color: #CC0000;
-    border-color: #CC0000;
+    background-color: #FFD700;  /* Changed button color to yellow */;
+    border-color: #FFD700;
 }}
 .stButton>button:hover {{
     color: white;
-    background-color: #990000;
-    border-color: #990000;
+    background-color: #FFC107;  /* Slightly darker yellow on hover */
+    border-color: #FFC107;
 }}
 .css-1d391kg {{
     background-color: rgba(0, 0, 0, 0.05);
@@ -137,13 +137,10 @@ with tab1:
     top_types = conn.execute(query).df()
     
     # Create bar chart
-    fig = px.bar(top_types, 
-                 x='count', 
-                 y='type', 
-                 orientation='h',
-                 title=f'Top 10 Service Request Types {f"from {selected_source}" if selected_source != "All" else ""}',
+    fig = px.bar(top_types, x='count', y='type', orientation='h',
+                 title='Top 10 Service Request Types',
                  labels={'count': 'Number of Requests', 'type': 'Request Type'},
-                 color_discrete_sequence=['#CC0000'])
+                 color_discrete_sequence=['#FFD700'])  # changed to yellow
     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
     st.plotly_chart(fig)
 
@@ -170,7 +167,7 @@ with tab2:
     fig = px.line(response_times, x='month', y='avg_response_time',
                   title=f'Average Response Time for {selected_type}',
                   labels={'month': 'Month', 'avg_response_time': 'Average Response Time (hours)'},
-                  color_discrete_sequence=['#CC0000'])
+                  color_discrete_sequence=['#FFD700']) #for yellow
     st.plotly_chart(fig)
 
 with tab3:
@@ -191,31 +188,16 @@ with tab3:
     """
     neighborhood_data = conn.execute(query).df()
     
-    # Create scatter mapbox
-    fig = px.scatter_mapbox(
-        neighborhood_data,
-        lat='lat',
-        lon='lon',
-        size='count',
-        color='count',
-        hover_name='neighborhood',
-        hover_data={'count': True, 'lat': False, 'lon': False},
-        color_continuous_scale='Reds',
-        zoom=11,
-        title='Service Requests by Neighborhood',
-        size_max=40,
-        mapbox_style='carto-positron'
-    )
-    
-    # Update layout
-    fig.update_layout(
-        margin={"r":0,"t":30,"l":0,"b":0},
-        mapbox=dict(
-            center=dict(lat=42.3601, lon=-71.0589),  # Boston coordinates
-        )
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+    # Create choropleth map
+    fig = px.choropleth(neighborhood_data,
+                        geojson="https://raw.githubusercontent.com/codeforboston/boston-neighborhoods/main/boston_neighborhoods.geojson",
+                        locations='neighborhood',
+                        color='count',
+                        featureidkey="properties.Name",
+                        color_continuous_scale="Reds",
+                        title='Service Requests by Neighborhood')
+    fig.update_geos(fitbounds="locations", visible=False)
+    st.plotly_chart(fig)
 
     # Top 5 neighborhoods table
     st.subheader("Top 5 Neighborhoods by Service Requests")
