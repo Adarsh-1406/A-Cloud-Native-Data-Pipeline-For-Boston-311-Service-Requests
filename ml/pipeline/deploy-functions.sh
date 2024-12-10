@@ -50,7 +50,7 @@ gcloud functions deploy mlops-caseduration-prediction \
     --runtime python311 \
     --trigger-http \
     --entry-point task \
-    --source /home/gunjan21/BA882-Team02-project/ml/functions/prediction \
+    --source /home/gunjan21/BA882-Team02-project/ml/pipeline/functions/prediction \
     --stage-bucket group2-ba882-functions \
     --service-account group2-ba882@group2-ba882.iam.gserviceaccount.com \
     --region us-central1 \
