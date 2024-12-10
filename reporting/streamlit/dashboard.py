@@ -136,9 +136,10 @@ with tab1:
     
     top_types = conn.execute(query).df()
     
-    # Create bar chart
+    # Create bar chart with yellow colour scheme
     fig = px.bar(top_types, x='count', y='type', orientation='h',
                  title='Top 10 Service Request Types',
+
                  labels={'count': 'Number of Requests', 'type': 'Request Type'},
                  color_discrete_sequence=['#FFD700'])  # changed to yellow
     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
@@ -188,6 +189,33 @@ with tab3:
     """
     neighborhood_data = conn.execute(query).df()
     
+
+    # Create scatter mapbox
+    fig = px.scatter_mapbox(
+        neighborhood_data,
+        lat='lat',
+        lon='lon',
+        size='count',
+        color='count',
+        hover_name='neighborhood',
+        hover_data={'count': True, 'lat': False, 'lon': False},
+        color_continuous_scale='Reds',
+        zoom=11,
+        title='Service Requests by Neighborhood',
+        size_max=40,
+        mapbox_style='carto-positron'
+    )
+    
+    # Update layout
+    fig.update_layout(
+        margin={"r":0,"t":30,"l":0,"b":0},
+        mapbox=dict(
+            center=dict(lat=42.3601, lon=-71.0589),  # Boston coordinates
+        )
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
     # Create choropleth map
     fig = px.choropleth(neighborhood_data,
                         geojson="https://raw.githubusercontent.com/codeforboston/boston-neighborhoods/main/boston_neighborhoods.geojson",
@@ -201,5 +229,4 @@ with tab3:
 
     # Top 5 neighborhoods table
     st.subheader("Top 5 Neighborhoods by Service Requests")
-    top_5_table = neighborhood_data[['neighborhood', 'count']].head()
-    st.table(top_5_table)
+    st.table(neighborhood_data.head())
