@@ -20,7 +20,7 @@ db_schema = f"{db}.{schema}"
 
 # prediction service url
 # QUESTION:  What would you do to avoid below?
-EP = "https://us-central1-btibert-ba882-fall24.cloudfunctions.net/mlops-postlength-prediction"
+EP = "https://us-central1-group2-ba882.cloudfunctions.net/mlops-caseduration-prediction"
 
 
 @functions_framework.http
