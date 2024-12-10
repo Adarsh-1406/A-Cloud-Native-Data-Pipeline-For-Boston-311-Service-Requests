@@ -102,23 +102,46 @@ tab1, tab2, tab3 = st.tabs(["Service Request Types 📊", "Response Time Analysi
 with tab1:
     st.header('Top Service Request Types')
     
-    # Date range filter
-    date_range = st.date_input("Select Date Range", [pd.to_datetime('2024-01-01'), pd.to_datetime('2024-12-31')])
+    # Source filter
+    source_query = """
+    SELECT DISTINCT reason 
+    FROM city_services_boston.stage.case_duration
+    WHERE reason IS NOT NULL 
+    ORDER BY reason
+    """
+    sources = conn.execute(source_query).df()['reason'].tolist()
+    selected_source = st.selectbox("Select Reason", ['All'] + sources)
     
     # Query for top service request types
-    query = f"""
+    base_query = """
     SELECT type, COUNT(*) as count
-    FROM city_services_boston.stage.requests
-    WHERE open_dt BETWEEN '{date_range[0]}' AND '{date_range[1]}'
-    GROUP BY type
-    ORDER BY count DESC
-    LIMIT 10
+    FROM city_services_boston.stage.case_duration
     """
+    
+    if selected_source != 'All':
+        query = f"""
+        {base_query}
+        WHERE reason = '{selected_source}'
+        GROUP BY type
+        ORDER BY count DESC
+        LIMIT 10
+        """
+    else:
+        query = f"""
+        {base_query}
+        GROUP BY type
+        ORDER BY count DESC
+        LIMIT 10
+        """
+    
     top_types = conn.execute(query).df()
     
     # Create bar chart
-    fig = px.bar(top_types, x='count', y='type', orientation='h',
-                 title='Top 10 Service Request Types',
+    fig = px.bar(top_types, 
+                 x='count', 
+                 y='type', 
+                 orientation='h',
+                 title=f'Top 10 Service Request Types {f"from {selected_source}" if selected_source != "All" else ""}',
                  labels={'count': 'Number of Requests', 'type': 'Request Type'},
                  color_discrete_sequence=['#CC0000'])
     fig.update_layout(yaxis={'categoryorder': 'total ascending'})
@@ -136,7 +159,7 @@ with tab2:
     SELECT 
         DATE_TRUNC('month', open_dt) as month,
         AVG(DATEDIFF('hour', open_dt, closed_dt)) as avg_response_time
-    FROM city_services_boston.stage.response_time
+    FROM city_services_boston.stage.case_duration
     WHERE type = '{selected_type}'
     GROUP BY month
     ORDER BY month
@@ -153,26 +176,48 @@ with tab2:
 with tab3:
     st.header('Neighborhood Insights')
     
-    # Query for neighborhood data
+    # Query for location data with coordinates
     query = """
-    SELECT neighborhood, COUNT(*) as count
-    FROM city_services_boston.stage.loctions
+    SELECT 
+        neighborhood,
+        COUNT(*) as count,
+        AVG(latitude) as lat,
+        AVG(longitude) as lon
+    FROM city_services_boston.stage.locations
+    WHERE latitude IS NOT NULL 
+    AND longitude IS NOT NULL
     GROUP BY neighborhood
     ORDER BY count DESC
     """
     neighborhood_data = conn.execute(query).df()
     
-    # Create choropleth map
-    fig = px.choropleth(neighborhood_data,
-                        geojson="https://raw.githubusercontent.com/codeforboston/boston-neighborhoods/main/boston_neighborhoods.geojson",
-                        locations='neighborhood',
-                        color='count',
-                        featureidkey="properties.Name",
-                        color_continuous_scale="Reds",
-                        title='Service Requests by Neighborhood')
-    fig.update_geos(fitbounds="locations", visible=False)
-    st.plotly_chart(fig)
+    # Create scatter mapbox
+    fig = px.scatter_mapbox(
+        neighborhood_data,
+        lat='lat',
+        lon='lon',
+        size='count',
+        color='count',
+        hover_name='neighborhood',
+        hover_data={'count': True, 'lat': False, 'lon': False},
+        color_continuous_scale='Reds',
+        zoom=11,
+        title='Service Requests by Neighborhood',
+        size_max=40,
+        mapbox_style='carto-positron'
+    )
+    
+    # Update layout
+    fig.update_layout(
+        margin={"r":0,"t":30,"l":0,"b":0},
+        mapbox=dict(
+            center=dict(lat=42.3601, lon=-71.0589),  # Boston coordinates
+        )
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 
     # Top 5 neighborhoods table
     st.subheader("Top 5 Neighborhoods by Service Requests")
-    st.table(neighborhood_data.head())
+    top_5_table = neighborhood_data[['neighborhood', 'count']].head()
+    st.table(top_5_table)
