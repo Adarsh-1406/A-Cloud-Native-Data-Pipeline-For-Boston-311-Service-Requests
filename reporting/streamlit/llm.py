@@ -9,9 +9,24 @@ import vertexai
 from vertexai.generative_models import GenerativeModel, Part
 from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
 from vertexai.generative_models import GenerationConfig
-
+import base64
+def load_background_image(image_file):
+    with open(image_file, "rb") as f:
+        data = base64.b64encode(f.read()).decode()
+    return data
+background_image = load_background_image("Boston city.webp")
+st.markdown(f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/webp;base64,{background_image}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }}
+    </style>
+""", unsafe_allow_html=True)
 # Title for the page
-st.title("🚀 **SQL Query Genius: Lets Generate Your Perfect Query!**")
+st.title("**311 Service Genius: Effortlessly Generate Service Request Queries!**")
 
 # Styling
 st.markdown("""
@@ -84,10 +99,13 @@ generation_config = GenerationConfig(temperature=0, response_mime_type="applicat
 
 # Streamlit App UI
 st.markdown("""
-    **Unlock the power of SQL with a simple prompt!** 
-    Tell us what you're looking for, and we'll turn it into the perfect SQL query for you in seconds.
-    Select a table, describe your query, and let our AI do the heavy lifting.
-""")
+    <p style="color: yellow; font-size: 18px; font-weight: bold;">
+        **Leverage the power of SQL for 311 Service Request Data**  
+        Provide a brief description of your query, and our AI will generate an optimized SQL query for you in just seconds.  
+        Choose a relevant service request table, outline your needs, and let our AI streamline the process to deliver precise insights.
+    </p>
+""", unsafe_allow_html=True)
+
 
 # Add table selection dropdown
 selected_table = st.selectbox("📝 Select the Table to Query:", tables, key="table_select")
@@ -97,7 +115,7 @@ fully_qualified_table = f"city_services_boston.stage.{selected_table}"
 user_input = st.text_area("💬 What Do You Need? Describe Your Query in Plain Language:", height=150)
 
 # Handle user input
-if st.button("🚀 Generate & Run SQL Query"):
+if st.button("Generate & Run SQL Query"):
     if user_input:
         # Fetch schema from MotherDuck
         try:

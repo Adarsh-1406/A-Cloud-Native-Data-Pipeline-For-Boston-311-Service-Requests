@@ -27,7 +27,23 @@ conn = duckdb.connect(f'md:?token={db_token}')
 # def load_lottiefile(filepath: str):
 #     with open(filepath, "r") as f:
 #         return json.load(f)
-
+# Set the background image using CSS
+# Function to load and encode the background image
+def load_background_image(image_file):
+    with open(image_file, "rb") as f:
+        data = base64.b64encode(f.read()).decode()
+    return data
+background_image = load_background_image("Boston city.webp")
+st.markdown(f"""
+    <style>
+    .stApp {{
+        background-image: url("data:image/webp;base64,{background_image}");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }}
+    </style>
+""", unsafe_allow_html=True)
 # Background image loading
 # def load_background_image(image_file):
 #     with open(image_file, "rb") as f:
@@ -199,7 +215,7 @@ with tab3:
         color='count',
         hover_name='neighborhood',
         hover_data={'count': True, 'lat': False, 'lon': False},
-        color_continuous_scale='Reds',
+        color_continuous_scale='YlGnBu',
         zoom=11,
         title='Service Requests by Neighborhood',
         size_max=40,
@@ -216,16 +232,16 @@ with tab3:
     
     st.plotly_chart(fig, use_container_width=True)
 
-    # Create choropleth map
-    fig = px.choropleth(neighborhood_data,
-                        geojson="https://raw.githubusercontent.com/codeforboston/boston-neighborhoods/main/boston_neighborhoods.geojson",
-                        locations='neighborhood',
-                        color='count',
-                        featureidkey="properties.Name",
-                        color_continuous_scale="Reds",
-                        title='Service Requests by Neighborhood')
-    fig.update_geos(fitbounds="locations", visible=False)
-    st.plotly_chart(fig)
+    # # Create choropleth map
+    # fig = px.choropleth(neighborhood_data,
+    #                     geojson="https://raw.githubusercontent.com/codeforboston/boston-neighborhoods/main/boston_neighborhoods.geojson",
+    #                     locations='neighborhood',
+    #                     color='count',
+    #                     featureidkey="properties.Name",
+    #                     color_continuous_scale="YlGnBu",
+    #                     title='Service Requests by Neighborhood')
+    # fig.update_geos(fitbounds="locations", visible=False)
+    # st.plotly_chart(fig)
 
     # Top 5 neighborhoods table
     st.subheader("Top 5 Neighborhoods by Service Requests")

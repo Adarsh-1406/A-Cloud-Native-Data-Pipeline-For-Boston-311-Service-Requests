@@ -12,3 +12,5 @@ google-cloud-aiplatform>=1.36.0
 vertexai>=0.0.1
 networkx>=3.1
 matplotlib>=3.7.1
+plotly
+streamlit_lottie
