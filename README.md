@@ -3,13 +3,14 @@
 ## BA882 Deploying Analytics Pipelines
 
 ## About:
-🌆 **Boston 311 Cloud-Native Data Pipeline**
+🌆 **Boston 311 Cloud-Native Data Pipeline** 🚀  
 **Real-time Analytics** | **Geospatial Dashboards** | **ML Predictions** | **Text-to-SQL LLMs**
 
 📌 **Overview**  
 This project presents an end-to-end cloud-native data pipeline developed for managing and analyzing Boston 311 service request data. The goal was to build a robust, scalable architecture that could not only process over 100,000+ daily records in real-time but also deliver actionable insights through predictive modeling, interactive dashboards, and LLM-powered querying.  
 
 It was built as part of the "Deploying Analytics Pipelines" course at Boston University (Fall 2024), with a focus on solving real-world civic tech challenges using modern data engineering and analytics tools.
+
 
 🔧 **Tech Stack**  
 - **Google Cloud Platform (GCP)** – BigQuery, Cloud Storage, Cloud Functions  
@@ -20,6 +21,7 @@ It was built as part of the "Deploying Analytics Pipelines" course at Boston Uni
 - **Apache Superset** – Data exploration and self-service BI  
 - **Scikit-learn (Random Forest Regression)** – Forecasting resolution times  
 - **LLMs (Text-to-SQL)** – Natural language interface for non-technical users  
+
 
 🎯 **Key Features**
 
