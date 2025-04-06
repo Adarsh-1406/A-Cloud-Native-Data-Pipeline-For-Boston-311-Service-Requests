@@ -1,8 +1,8 @@
 # BUILDING A CLOUD-NATIVE DATA PIPELINE: INTEGRATING BOSTON 311 DATA FOR REAL-TIME INSIGHTS
 
 ## BA882 Deploying Analytics Pipelines - Group Project
-### Collabarators
 
+## About:
 🌆 Boston 311 Cloud-Native Data Pipeline
 🚀 Real-time Analytics | Geospatial Dashboards | ML Predictions | Text-to-SQL LLMs
 
@@ -54,3 +54,4 @@ Reduced manual querying time by 30%, democratizing access to insights
 ✅ Reduced SLA violations by 18% via predictive alerting
 ✅ Enabled self-service analytics for business users and citizens
 ✅ Enhanced citizen satisfaction through better response planning
+
