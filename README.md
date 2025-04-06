@@ -1,9 +1,9 @@
-# BUILDING A CLOUD-NATIVE DATA PIPELINE: INTEGRATING BOSTON 311 DATA FOR REAL-TIME INSIGHTS
+# Building A Cloud-Native Data Pipeline: Integrating Boston 311 Data For Real-Time Insights
 
-## BA882 Deploying Analytics Pipelines - Group Project
+## BA882 Deploying Analytics Pipelines
 
 ## About:
-🌆 Boston 311 Cloud-Native Data Pipeline
+🌆 **Boston 311 Cloud-Native Data Pipeline**
 🚀 Real-time Analytics | Geospatial Dashboards | ML Predictions | Text-to-SQL LLMs
 
 📌 Overview
